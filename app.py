@@ -1,6 +1,6 @@
 import os
 import datetime
-from flask import Flask, request, render_template, redirect, url_for, flash, session, send_from_directory
+from flask import Flask, request, render_template, redirect, url_for, flash, session, send_from_directory, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from werkzeug.utils import secure_filename
@@ -50,13 +50,12 @@ class Comment(db.Model):
     timestamp = db.Column(db.DateTime, default=datetime.datetime.utcnow)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     submission_id = db.Column(db.Integer, db.ForeignKey('submission.id'), nullable=False)
-    # ★★★ 新增的字段 ★★★
     read_by_user = db.Column(db.Boolean, default=False, nullable=False)
     read_by_admin = db.Column(db.Boolean, default=False, nullable=False)
 
 
 # --- 3. 路由 ---
-# ... (从 @app.route('/') 到 /logout 的路由无变化) ...
+# ... (从 @app.route('/') 到 /upload_files 的所有路由代码保持不变) ...
 @app.route('/')
 def index():
     if 'user_id' in session and not session.get('admin_logged_in'):
@@ -133,25 +132,19 @@ def change_password():
     return render_template('change_password.html')
 
 
-# ★★★ 用户中心逻辑大更新：增加未读消息数计算 ★★★
 @app.route('/dashboard')
 def dashboard():
     if 'user_id' not in session or session.get('admin_logged_in'):
         return redirect(url_for('user_login'))
-
     user_submissions = Submission.query.filter_by(user_id=session['user_id']).order_by(
         Submission.timestamp.desc()).all()
-
-    # 为每个案件计算未读消息数
     for sub in user_submissions:
         sub.unread_count = Comment.query.filter_by(submission_id=sub.id, read_by_user=False).count()
-
     return render_template('dashboard.html', submissions=user_submissions)
 
 
 @app.route('/upload', methods=['POST'])
 def upload_files():
-    # ... (此函数无变化) ...
     if 'user_id' not in session or session.get('admin_logged_in'):
         return redirect(url_for('user_login'))
     description = request.form['description']
@@ -176,90 +169,66 @@ def upload_files():
     return redirect(url_for('dashboard'))
 
 
-# ★★★ 案件详情页逻辑大更新：增加标记为已读功能 ★★★
 @app.route('/submission/<int:submission_id>')
 def submission_detail(submission_id):
     is_admin, user_id = session.get('admin_logged_in'), session.get('user_id')
     if not is_admin and not user_id: return redirect(url_for('user_login'))
-
     submission = Submission.query.get_or_404(submission_id)
     if not is_admin and submission.user_id != user_id:
         flash('您无权访问此案件。', 'danger')
         return redirect(url_for('dashboard'))
-
-    # 核心逻辑：进入页面时，将所有未读消息标记为已读
     if is_admin:
         Comment.query.filter_by(submission_id=submission.id, read_by_admin=False).update({'read_by_admin': True})
     else:
         Comment.query.filter_by(submission_id=submission.id, read_by_user=False).update({'read_by_user': True})
     db.session.commit()
-
     return render_template('submission_detail.html', submission=submission)
 
 
-# ★★★ 留言提交逻辑大更新：设置初始已读状态 ★★★
 @app.route('/submission/<int:submission_id>/comment', methods=['POST'])
 def post_comment(submission_id):
     is_admin, user_id = session.get('admin_logged_in'), session.get('user_id')
     if not (is_admin or user_id): return redirect(url_for('user_login'))
-
     submission = Submission.query.get_or_404(submission_id)
     if not is_admin and submission.user_id != user_id:
         flash('您无权在此案件留言。', 'danger')
         return redirect(url_for('dashboard'))
-
     comment_text = request.form.get('comment_text')
     if comment_text:
-        # 创建新留言，并根据发送者身份设置初始的已读状态
         if is_admin:
-            # 客服发的，自己当然算已读，但用户不算
             new_comment = Comment(text=comment_text, user_id=user_id, submission_id=submission.id, read_by_admin=True,
                                   read_by_user=False)
         else:
-            # 用户发的，自己算已读，但客服不算
             new_comment = Comment(text=comment_text, user_id=user_id, submission_id=submission.id, read_by_user=True,
                                   read_by_admin=False)
-
         db.session.add(new_comment)
         db.session.commit()
         flash('留言成功！', 'success')
     else:
         flash('留言内容不能为空！', 'warning')
-
     return redirect(url_for('submission_detail', submission_id=submission.id))
 
 
-# ★★★ 后台主页逻辑大更新：增加未读消息数计算 ★★★
+# ... (后台路由部分) ...
 @app.route('/admin/dashboard')
 def admin_dashboard():
     if not session.get('admin_logged_in'): return redirect(url_for('admin_login'))
-
     search_query, search_status = request.args.get('q', ''), request.args.get('status', '')
     page = request.args.get('page', 1, type=int)
-
     query = Submission.query.join(User).order_by(Submission.timestamp.desc())
     if search_query:
         search_term = f"%{search_query}%"
         query = query.filter(or_(User.username.like(search_term), Submission.description.like(search_term)))
     if search_status:
         query = query.filter(Submission.status == search_status)
-
     pagination = query.paginate(page=page, per_page=app.config['ITEMS_PER_PAGE'], error_out=False)
     submissions_on_page = pagination.items
-
-    # 为当前页的每个案件计算未读消息数
     for sub in submissions_on_page:
         sub.unread_count = Comment.query.filter_by(submission_id=sub.id, read_by_admin=False).count()
-
-    return render_template('admin.html',
-                           submissions=submissions_on_page,
-                           pagination=pagination,
-                           status_options=STATUS_OPTIONS,
-                           search_query=search_query,
-                           search_status=search_status)
+    return render_template('admin.html', submissions=submissions_on_page, pagination=pagination,
+                           status_options=STATUS_OPTIONS, search_query=search_query, search_status=search_status)
 
 
-# ... (从 @app.route('/admin/login') 到文件结尾的所有路由代码保持不变) ...
 @app.route('/admin/login', methods=['GET', 'POST'])
 def admin_login():
     if request.method == 'POST':
@@ -322,5 +291,43 @@ def update_status(submission_id):
     return redirect(url_for('admin_dashboard'))
 
 
+# ★★★ 新增的 API 路由，专门用来提供留言数据 ★★★
+@app.route('/api/submission/<int:submission_id>/comments')
+def api_get_comments(submission_id):
+    is_admin = session.get('admin_logged_in')
+    user_id = session.get('user_id')
+
+    # 安全检查
+    if not (is_admin or user_id):
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    submission = Submission.query.get_or_404(submission_id)
+    if not is_admin and submission.user_id != user_id:
+        return jsonify({'error': 'Forbidden'}), 403
+
+    comments = Comment.query.filter_by(submission_id=submission_id).order_by(Comment.timestamp.asc()).all()
+
+    # 将数据库对象转换成可序列化的字典列表
+    comments_data = []
+    for comment in comments:
+        is_viewer_author = False
+        # 判断当前查看者是否是这条留言的作者
+        if is_admin and comment.author.username == 'admin_user':
+            is_viewer_author = True
+        elif not is_admin and comment.user_id == user_id:
+            is_viewer_author = True
+
+        comments_data.append({
+            'id': comment.id,
+            'text': comment.text,
+            'timestamp': comment.timestamp.strftime('%Y-%m-%d %H:%M'),
+            'author_username': comment.author.username,
+            'is_viewer_author': is_viewer_author
+        })
+
+    return jsonify(comments_data)
+
+
+# --- 启动 ---
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
