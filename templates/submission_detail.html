@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+
+{% block title %}案件详情 - {{ super() }}{% endblock %}
+
+{% block content %}
+<div class="container my-4">
+    {% if session.get('admin_logged_in') %}
+        <a href="{{ url_for('admin_dashboard') }}" class="btn btn-outline-secondary btn-sm mb-3">← 返回管理中心</a>
+    {% else %}
+        <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary btn-sm mb-3">← 返回我的案件</a>
+    {% endif %}
+
+    <div class="card shadow-sm">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h1 class="h4 mb-0">案件 #{{ submission.id }} 详情</h1>
+            <span class="badge bg-info">{{ submission.status }}</span>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <h5>提交信息</h5>
+                    <p><strong>提交用户:</strong> {{ submission.author.username }}</p>
+                    <p><strong>提交时间:</strong> {{ submission.timestamp.strftime('%Y-%m-%d %H:%M') }}</p>
+                    <p><strong>案件描述:</strong></p>
+                    <p style="white-space: pre-wrap;">{{ submission.description }}</p>
+                </div>
+                <div class="col-md-6">
+                    <h5>相关文件</h5>
+                    <div class="list-group">
+                        {% for filename in submission.files.split(';') %}
+                            {% if filename %}
+                                <a href="/uploads/{{ filename }}" target="_blank" class="list-group-item list-group-item-action">{{ filename.split('_', 2)[-1] }}</a>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                    {% if submission.report_file %}
+                        <h5 class="mt-4">客服报告</h5>
+                        <div class="list-group">
+                             <a href="/uploads/{{ submission.report_file }}" target="_blank" class="list-group-item list-group-item-action list-group-item-success">点击查看报告</a>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow-sm mt-4">
+        <div class="card-header">
+            <h2 class="h5 mb-0">沟通记录</h2>
+        </div>
+        <div class="card-body" style="max-height: 400px; overflow-y: auto;">
+            {% if submission.comments %}
+                {% for comment in submission.comments|sort(attribute='timestamp') %}
+                <div class="d-flex mb-3 {% if (comment.author.id == session.get('user_id') and not session.get('admin_logged_in')) or (comment.author.username == 'admin_user' and session.get('admin_logged_in')) %}flex-row-reverse{% endif %}">
+                    <div class="card {% if (comment.author.id == session.get('user_id') and not session.get('admin_logged_in')) or (comment.author.username == 'admin_user' and session.get('admin_logged_in')) %}bg-primary text-white{% else %}bg-light{% endif %}" style="max-width: 75%;">
+                        <div class="card-body p-2">
+                             <p class="card-text mb-1" style="white-space: pre-wrap;">{{ comment.text }}</p>
+                             <small class="text-muted {% if (comment.author.id == session.get('user_id') and not session.get('admin_logged_in')) or (comment.author.username == 'admin_user' and session.get('admin_logged_in')) %}text-white-50{% endif %}">
+                                 <strong>{{ comment.author.username }}:</strong> {{ comment.timestamp.strftime('%Y-%m-%d %H:%M') }}
+                             </small>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <p class="text-muted">暂无沟通记录。</p>
+            {% endif %}
+        </div>
+        <div class="card-footer">
+            <form method="post" action="{{ url_for('post_comment', submission_id=submission.id) }}">
+                <div class="input-group">
+                    <textarea name="comment_text" class="form-control" placeholder="在此输入您的留言..." rows="2" required></textarea>
+                    <button class="btn btn-primary" type="submit">发送</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

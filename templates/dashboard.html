@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+
+{% block title %}用户中心 - {{ super() }}{% endblock %}
+
+{% block content %}
+<div class="container my-4">
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap">
+        <h1 class="h2">欢迎, {{ session.username }}!</h1>
+        <a href="{{ url_for('change_password') }}" class="btn btn-outline-secondary btn-sm">修改密码</a>
+    </div>
+
+    <div class="card shadow-sm mb-5">
+        <div class="card-header">
+            <h2 class="h5 mb-0">提交新案件</h2>
+        </div>
+        <div class="card-body">
+            <form method="post" enctype="multipart/form-data" action="{{ url_for('upload_files') }}">
+                <div class="mb-3">
+                    <label for="description" class="form-label">案件描述:</label>
+                    <textarea class="form-control" id="description" name="description" rows="5" required placeholder="请在这里详细描述您的情况..."></textarea>
+                </div>
+                <div class="mb-3">
+                    <label for="files" class="form-label">上传相关文件 (按住Ctrl或Command键可选择多个):</label>
+                    <input class="form-control" type="file" id="files" name="files" multiple>
+                </div>
+                <button type="submit" class="btn btn-primary">确认提交</button>
+            </form>
+        </div>
+    </div>
+
+    <h2 class="h4 mb-3">我的案件列表</h2>
+    <div class="card shadow-sm">
+        <div class="card-body">
+            {% if submissions %}
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th scope="col">提交时间</th>
+                                <th scope="col">我的描述</th>
+                                <th scope="col">沟通记录</th>
+                                <th scope="col">当前状态</th>
+                                <th scope="col">客服报告</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for sub in submissions %}
+                            <tr>
+                                <td>{{ sub.timestamp.strftime('%Y-%m-%d %H:%M') }}</td>
+                                <td style="max-width: 300px; white-space: pre-wrap;">{{ sub.description|truncate(80) }}</td>
+                                <td>
+                                    <a href="{{ url_for('submission_detail', submission_id=sub.id) }}" class="btn btn-outline-primary btn-sm position-relative">
+                                        进入沟通
+                                        {% if sub.unread_count > 0 %}
+                                        <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+                                            {{ sub.unread_count }}
+                                            <span class="visually-hidden">unread messages</span>
+                                        </span>
+                                        {% endif %}
+                                    </a>
+                                </td>
+                                <td>
+                                    {% if sub.status == '待处理' %}
+                                        <span class="badge bg-secondary">{{ sub.status }}</span>
+                                    {% elif sub.status == '审阅中' %}
+                                        <span class="badge bg-primary">{{ sub.status }}</span>
+                                    {% elif sub.status == '需补充材料' %}
+                                        <span class="badge bg-danger">{{ sub.status }}</span>
+                                    {% elif sub.status == '已完成' %}
+                                        <span class="badge bg-success">{{ sub.status }}</span>
+                                    {% else %}
+                                        <span class="badge bg-light text-dark">{{ sub.status }}</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if sub.report_file %}
+                                        <a href="/uploads/{{ sub.report_file }}" target="_blank" class="btn btn-success btn-sm">查看报告</a>
+                                    {% else %}
+                                        <span class="text-muted">暂无</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <p class="text-center text-muted">您还没有提交过任何案件。</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

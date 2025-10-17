@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>法律援助材料上传</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f4f7f6; margin: 0; padding: 40px; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+        .container { background-color: white; padding: 40px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 100%; max-width: 600px; }
+        h1 { color: #333; text-align: center; margin-bottom: 20px; }
+        form { display: flex; flex-direction: column; }
+        label { margin-bottom: 8px; font-weight: bold; color: #555; }
+        textarea, input[type="file"] { margin-bottom: 20px; padding: 12px; border: 1px solid #ddd; border-radius: 4px; font-size: 16px; }
+        textarea { resize: vertical; min-height: 120px; }
+        input[type="submit"] { background-color: #007bff; color: white; padding: 15px; border: none; border-radius: 4px; font-size: 18px; cursor: pointer; transition: background-color 0.3s; }
+        input[type="submit"]:hover { background-color: #0056b3; }
+        .flash-message { padding: 15px; margin-bottom: 20px; border-radius: 4px; text-align: center; }
+        .flash-success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>法律援助材料上传系统</h1>
+
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="flash-message flash-success">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <form method="post" enctype="multipart/form-data" action="/upload">
+            <label for="description">案件描述:</label>
+            <textarea id="description" name="description" placeholder="请在此处简要描述您的情况..." required></textarea>
+
+            <label for="files">上传相关文件 (可多选):</label>
+            <input type="file" id="files" name="files" multiple>
+
+            <input type="submit" value="确认提交">
+        </form>
+    </div>
+</body>
+</html>

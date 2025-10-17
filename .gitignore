@@ -1,0 +1,17 @@
+# Virtual Environment
+venv/
+.venv/
+
+# PyCharm
+.idea/
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Instance Folder
+instance/
+
+# SQLite database
+project.db
