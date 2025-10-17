@@ -48,10 +48,10 @@
         <div class="card-header">
             <h2 class="h5 mb-0">沟通记录</h2>
         </div>
-        <div class="card-body" style="max-height: 400px; overflow-y: auto;">
+        <div class="card-body" id="comments-container" style="max-height: 400px; overflow-y: auto;">
             {% if submission.comments %}
                 {% for comment in submission.comments|sort(attribute='timestamp') %}
-                <div class="d-flex mb-3 {% if (comment.author.id == session.get('user_id') and not session.get('admin_logged_in')) or (comment.author.username == 'admin_user' and session.get('admin_logged_in')) %}flex-row-reverse{% endif %}">
+                <div class="d-flex mb-3 {% if (comment.author.id == session.get('user_id') and not session.get('admin_logged_in')) or (comment.author.username == 'admin_user' and session.get('admin_logged_in')) %}flex-row-reverse{% endif %}" id="comment-{{ comment.id }}">
                     <div class="card {% if (comment.author.id == session.get('user_id') and not session.get('admin_logged_in')) or (comment.author.username == 'admin_user' and session.get('admin_logged_in')) %}bg-primary text-white{% else %}bg-light{% endif %}" style="max-width: 75%;">
                         <div class="card-body p-2">
                              <p class="card-text mb-1" style="white-space: pre-wrap;">{{ comment.text }}</p>
@@ -63,7 +63,7 @@
                 </div>
                 {% endfor %}
             {% else %}
-                <p class="text-muted">暂无沟通记录。</p>
+                <p id="no-comments-placeholder" class="text-muted">暂无沟通记录。</p>
             {% endif %}
         </div>
         <div class="card-footer">
@@ -76,4 +76,102 @@
         </div>
     </div>
 </div>
+
+<script>
+    // 当整个页面加载完毕后，执行我们的代码
+    document.addEventListener('DOMContentLoaded', function() {
+        const submissionId = {{ submission.id }};
+        const commentsContainer = document.getElementById('comments-container');
+        const noCommentsPlaceholder = document.getElementById('no-comments-placeholder');
+
+        // 将留言区滚动到底部
+        function scrollToBottom() {
+            commentsContainer.scrollTop = commentsContainer.scrollHeight;
+        }
+
+        // 首次加载时滚动到底部
+        scrollToBottom();
+
+        // 这个函数负责根据从服务器获取的单个留言数据，创建 HTML 元素
+        function createCommentElement(comment) {
+            const commentWrapper = document.createElement('div');
+            commentWrapper.id = `comment-${comment.id}`;
+            commentWrapper.classList.add('d-flex', 'mb-3');
+            if (comment.is_viewer_author) {
+                commentWrapper.classList.add('flex-row-reverse');
+            }
+
+            const card = document.createElement('div');
+            card.classList.add('card');
+            card.style.maxWidth = '75%';
+            if (comment.is_viewer_author) {
+                card.classList.add('bg-primary', 'text-white');
+            } else {
+                card.classList.add('bg-light');
+            }
+
+            const cardBody = document.createElement('div');
+            cardBody.classList.add('card-body', 'p-2');
+
+            const text = document.createElement('p');
+            text.classList.add('card-text', 'mb-1');
+            text.style.whiteSpace = 'pre-wrap';
+            text.textContent = comment.text;
+
+            const small = document.createElement('small');
+            small.classList.add('text-muted');
+            if (comment.is_viewer_author) {
+                small.classList.add('text-white-50');
+            }
+            small.innerHTML = `<strong>${comment.author_username}:</strong> ${comment.timestamp}`;
+
+            cardBody.appendChild(text);
+            cardBody.appendChild(small);
+            card.appendChild(cardBody);
+            commentWrapper.appendChild(card);
+
+            return commentWrapper;
+        }
+
+        // 这个函数是我们的核心，它会去服务器获取新留言
+        async function fetchNewComments() {
+            try {
+                const response = await fetch(`/api/submission/${submissionId}/comments`);
+                if (!response.ok) {
+                    console.error('Failed to fetch comments');
+                    return;
+                }
+                const comments = await response.json();
+
+                let newCommentAdded = false;
+
+                comments.forEach(comment => {
+                    // 检查这个留言是否已经显示在页面上
+                    if (!document.getElementById(`comment-${comment.id}`)) {
+                        // 如果没有，就创建它并添加到留言区
+                        const newCommentEl = createCommentElement(comment);
+                        commentsContainer.appendChild(newCommentEl);
+                        newCommentAdded = true;
+                    }
+                });
+
+                // 如果有新留言被添加，并且之前没有留言，则移除“暂无记录”的提示
+                if (newCommentAdded && noCommentsPlaceholder) {
+                    noCommentsPlaceholder.remove();
+                }
+
+                // 如果有新留言，就自动滚动到底部
+                if (newCommentAdded) {
+                    scrollToBottom();
+                }
+
+            } catch (error) {
+                console.error('Error fetching comments:', error);
+            }
+        }
+
+        // 设置一个定时器，每 5 秒钟调用一次 fetchNewComments 函数
+        setInterval(fetchNewComments, 5000); // 5000 毫秒 = 5 秒
+    });
+</script>
 {% endblock %}
